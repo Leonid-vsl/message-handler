@@ -10,7 +10,7 @@ app:
   incomingMessageTopic: incoming-messages
   incomingMessagePartitions: 3
   incomingMessageListeners: 3
-  batchSize: 5
+  batchSize: 3
   batchTimeout: 15_000 #millis
 
 

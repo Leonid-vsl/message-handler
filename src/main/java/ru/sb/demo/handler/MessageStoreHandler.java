@@ -47,10 +47,12 @@ public class MessageStoreHandler {
         try {
             var batches = ListUtils.partition(messages, batchSize).stream().
                     filter(batch -> batch.size() == batchSize || isBatchTimedOut(batch))
-                    .map(batch -> batch.stream().map(ConsumerRecord::value).collect(toSet()))
+                    .map(batch -> batch.stream().map(ConsumerRecord::value)
+                            .distinct()
+                            .collect(toList()))
                     .collect(toList());
 
-            for (Set<Message> batch : batches) {
+            for (List<Message> batch : batches) {
                 logger.info("Sending to storage messages with id's {}",
                         batch.stream().map(Message::getMessageId).collect(toList()));
                 messageService.handleMessages(batch);
