@@ -1,0 +1,40 @@
+server:
+  port: 8888
+
+
+
+app:
+  handledMessageTopic: handeled-messages
+  handledMessagePartitions: 3
+  handledMessageListeners: 3
+  incomingMessageTopic: incoming-messages
+  incomingMessagePartitions: 3
+  incomingMessageListeners: 3
+  batchSize: 5
+  batchTimeout: 15_000 #millis
+
+
+
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate.dialect: org.hibernate.dialect.PostgreSQLDialect
+      hibernate.current_session_context_class: thread
+      hibernate.jdbc.batch_size: 2
+      hibernate.format_sql: true
+      hibernate.show_sql: true
+      hibernate.order_inserts: true
+
+#      hibernate.jdbc.lob.non_contextual_creation: true
+    hibernate:
+      ddl-auto: validate
+
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sb_demo
+    username: demo
+    password: demo
+    driverClassName: org.postgresql.Driver
+  kafka:
+    server: localhost:9092
