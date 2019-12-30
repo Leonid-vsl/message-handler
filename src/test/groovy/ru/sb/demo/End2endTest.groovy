@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.testcontainers.containers.DockerComposeContainer
 import org.testcontainers.containers.wait.strategy.Wait
@@ -116,7 +117,7 @@ class End2endTest extends Specification {
 
         where:
         incomingMessage                                                                      | stored
-        [new MessageBatch(messages: [])]                                                     | []
+        [new MessageBatch(messages: [])]                                                     | [ ]
         [new MessageBatch(messages: [msg1]), new MessageBatch(messages: [msg1])]             | [msg1]
         [new MessageBatch(messages: [msg1])]                                                 | [msg1]
         [new MessageBatch(messages: [msg1, msg1])]                                           | [msg1]

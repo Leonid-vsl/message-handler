@@ -36,7 +36,7 @@ public class TestKafkaProducerConfig {
         return new KafkaProducer<>(props);
     }
 
-    @Primary
+
     @Bean
     public TestConsumerRebalanceListener incomingMessageRebalanceListener(){
         return new TestConsumerRebalanceListener();
