@@ -116,12 +116,14 @@ class End2endTest extends Specification {
 
         where:
         incomingMessage                                                                      | stored
+        [new MessageBatch(messages: [])]                                                     | []
         [new MessageBatch(messages: [msg1]), new MessageBatch(messages: [msg1])]             | [msg1]
         [new MessageBatch(messages: [msg1])]                                                 | [msg1]
         [new MessageBatch(messages: [msg1, msg1])]                                           | [msg1]
         [new MessageBatch(messages: [msg1, msg2])]                                           | [msg1, msg2]
         [new MessageBatch(messages: [msg1, msg2]), new MessageBatch(messages: [msg3, msg4])] | [msg1, msg2, msg3, msg4]
         [new MessageBatch(messages: [msg1, msg2, msg3, msg4, msg5, msg0])]                   | [msg1, msg2, msg3, msg4, msg5]
+
     }
 
 }
