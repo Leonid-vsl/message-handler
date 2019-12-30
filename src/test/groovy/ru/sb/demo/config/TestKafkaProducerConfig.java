@@ -1,18 +1,13 @@
 package ru.sb.demo.config;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-import ru.sb.demo.kafka.TestConsumerRebalanceListener;
 
-import java.util.Collection;
 import java.util.Properties;
 
 @TestConfiguration()
@@ -34,12 +29,6 @@ public class TestKafkaProducerConfig {
 
 
         return new KafkaProducer<>(props);
-    }
-
-
-    @Bean
-    public TestConsumerRebalanceListener incomingMessageRebalanceListener(){
-        return new TestConsumerRebalanceListener();
     }
 
 

@@ -29,8 +29,7 @@ import java.util.Map;
 
 @Configuration
 @EnableKafka
-public class KafkaConfig
-{
+public class KafkaConfig {
 
     @Value("${spring.kafka.server}")
     private String kafkaServer;
@@ -100,26 +99,11 @@ public class KafkaConfig
         ConcurrentKafkaListenerContainerFactory<Long, MessageBatch> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConcurrency(incomingMessagePartitions);
-        factory.getContainerProperties().setConsumerRebalanceListener(incomingMessageRebalanceListener());
+
         factory.setConsumerFactory(incomingConsumerFactory());
         factory.setBatchListener(true);
 
         return factory;
-    }
-
-    @Bean
-    public ConsumerRebalanceListener incomingMessageRebalanceListener(){
-        return new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-
-            }
-        };
     }
 
 

@@ -5,16 +5,16 @@ import groovy.sql.Sql
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.test.annotation.DirtiesContext
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry
+import org.springframework.kafka.listener.MessageListenerContainer
+import org.springframework.kafka.test.utils.ContainerTestUtils
 import org.springframework.test.context.ActiveProfiles
 import org.testcontainers.containers.DockerComposeContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.spock.Testcontainers
 import ru.sb.demo.config.TestKafkaProducerConfig
-import ru.sb.demo.kafka.TestConsumerRebalanceListener
 import ru.sb.demo.model.Message
 import ru.sb.demo.model.MessageBatch
 import ru.sb.demo.repository.MessageRepository
@@ -22,7 +22,6 @@ import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Unroll
 import spock.util.concurrent.PollingConditions
-
 
 import java.time.Duration
 
@@ -48,8 +47,7 @@ class End2endTest extends Specification {
     KafkaProducer incomingMsgProducer
 
     @Autowired
-    @Qualifier('incomingMessageRebalanceListener')
-    TestConsumerRebalanceListener partitionListener
+    private KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry;
 
     @Autowired
     MessageRepository repository
@@ -69,9 +67,11 @@ class End2endTest extends Specification {
     }
 
     def setup() {
-        PollingConditions initCondition = new PollingConditions(timeout: 30)
-        initCondition.eventually {
-            partitionListener.isAssigned()
+        for (MessageListenerContainer messageListenerContainer : kafkaListenerEndpointRegistry
+                .getListenerContainers()) {
+            ContainerTestUtils.waitForAssignment(
+                    messageListenerContainer, 3
+            )
         }
     }
 
@@ -117,7 +117,7 @@ class End2endTest extends Specification {
 
         where:
         incomingMessage                                                                      | stored
-        [new MessageBatch(messages: [])]                                                     | [ ]
+        [new MessageBatch(messages: [])]                                                     | []
         [new MessageBatch(messages: [msg1]), new MessageBatch(messages: [msg1])]             | [msg1]
         [new MessageBatch(messages: [msg1])]                                                 | [msg1]
         [new MessageBatch(messages: [msg1, msg1])]                                           | [msg1]
