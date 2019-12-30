@@ -7,6 +7,7 @@ import org.springframework.orm.jpa.JpaSystemException;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.repository.MessageRepository;
 
+import javax.validation.ConstraintViolationException;
 import java.sql.BatchUpdateException;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -31,15 +32,19 @@ public class MessageServiceImpl implements MessageService {
             logger.error("Connection exception", e);
             throw new DataBaseNotAvailable();
         } catch (DataIntegrityViolationException e) {
-            BatchUpdateException batchUpdateException = (BatchUpdateException) e.getCause().getCause();
-            var updateCounts = batchUpdateException.getUpdateCounts();
-            for (int i = 0; i < updateCounts.length; i++) {
-                if (updateCounts[i] == Statement.EXECUTE_FAILED) {
-                    logger.error("Failed to save message {}", messages.get(i));
+            if (e.getCause() instanceof ConstraintViolationException) {
+                ConstraintViolationException constraintViolationException = (ConstraintViolationException) e.getCause();
+                if(constraintViolationException.getCause() instanceof BatchUpdateException){
+                    BatchUpdateException batchUpdateException = (BatchUpdateException) constraintViolationException.getCause();
+                    var updateCounts = batchUpdateException.getUpdateCounts();
+                    for (int i = 0; i < updateCounts.length; i++) {
+                        if (updateCounts[i] == Statement.EXECUTE_FAILED) {
+                            logger.error("Failed to save message {}", messages.get(i));
+                        }
+                    }
                 }
             }
-        } catch (Exception e) {
-            logger.error("Error while saving data", e);
+            logger.error(e);
         }
     }
 }
