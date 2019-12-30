@@ -32,7 +32,7 @@ public class MessageServiceImpl implements MessageService {
             throw new DataBaseNotAvailable();
         } catch (DataIntegrityViolationException e) {
             BatchUpdateException batchUpdateException = (BatchUpdateException) e.getCause().getCause();
-            int[] updateCounts = batchUpdateException.getUpdateCounts();
+            var updateCounts = batchUpdateException.getUpdateCounts();
             for (int i = 0; i < updateCounts.length; i++) {
                 if (updateCounts[i] == Statement.EXECUTE_FAILED) {
                     logger.error("Failed to save message {}", messages.get(i));
