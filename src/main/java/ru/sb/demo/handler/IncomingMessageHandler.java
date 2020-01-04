@@ -11,7 +11,7 @@ import ru.sb.demo.model.MessageBatch;
 
 import java.util.List;
 
-public class IncomingMessageHandler extends AbstractConsumerSeekAware {
+public class IncomingMessageHandler {
 
     private static final Logger logger = LogManager.getLogger(IncomingMessageHandler.class);
 
@@ -27,11 +27,11 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
     }
 
 
-    @KafkaListener(
-            id = "incoming-message-handler",
-            topics = "${app.incomingMessageTopic}",
-            containerFactory = "incomingMessageContainerFactory"
-    )
+//    @KafkaListener(
+//            id = "incoming-message-handler",
+//            topics = "${app.incomingMessageTopic}",
+//            containerFactory = "incomingMessageContainerFactory"
+//    )
     public void handleIncomingMessage(@Payload List<MessageBatch> batch) {
 
         logger.debug("Received new message batch of size {}", batch.size());

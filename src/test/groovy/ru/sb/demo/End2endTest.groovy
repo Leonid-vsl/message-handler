@@ -112,7 +112,7 @@ class End2endTest extends Specification {
         then:
 
         testCondition.eventually {
-            assert repository.findAll() as Set == stored.sort() as Set
+            assert repository.findAll() as Set == stored as Set
         }
 
         where:

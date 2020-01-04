@@ -23,6 +23,8 @@ public class MessageStoreHandler {
 
     private final MessageService messageService;
 
+    private final ThreadLocal<Integer> local = ThreadLocal.withInitial(() -> 0);
+
     @Value("${app.batchSize}")
     private Integer batchSize;
 
@@ -37,35 +39,55 @@ public class MessageStoreHandler {
             id = "message-store-handler",
             topics = "${app.handledMessageTopic}",
             containerFactory = "messageStoreContainerFactory"
+            //,
+
+           // properties = {"max.poll.interval.ms:10000"}
+
+
     )
     public void handleMessages(@Payload List<ConsumerRecord<Long, Message>> messages, Acknowledgment ack) {
 
         logger.info("accept messages: {}", messages.stream().map(r -> r.value().getMessageId())
                 .collect(toList()));
 
-        int executedMessages = 0;
+        int executedMessages = 1;
+
         try {
-            var batches = ListUtils.partition(messages, batchSize).stream().
-                    filter(batch -> batch.size() == batchSize || isBatchTimedOut(batch))
-                    .map(batch -> batch.stream().map(ConsumerRecord::value)
-                            .distinct()
-                            .collect(toList()))
-                    .collect(toList());
-
-            for (List<Message> batch : batches) {
-                logger.info("Sending to storage messages with id's {}",
-                        batch.stream().map(Message::getMessageId).collect(toList()));
-                messageService.handleMessages(batch);
-                executedMessages += batch.size();
+            if (local.get() % 2 == 0) {
+                throw new RuntimeException("Failed-------------------------------");
+            } else if ((int) (Math.random() * 6) > 3) {
+                try {
+                    logger.info("----------------------------------------------Start sleeping");
+                    Thread.currentThread().sleep(30_000);
+                    logger.info("------------------------------------------wake up after sleep");
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
+//            var batches = ListUtils.partition(messages, batchSize).stream().
+//                    filter(batch -> batch.size() == batchSize || isBatchTimedOut(batch))
+//                    .map(batch -> batch.stream().map(ConsumerRecord::value)
+//                            .distinct()
+//                            .collect(toList()))
+//                    .collect(toList());
+//
+//            for (List<Message> batch : batches) {
+//                logger.info("Sending to storage messages with id's {}",
+//                        batch.stream().map(Message::getMessageId).collect(toList()));
+//                messageService.handleMessages(batch);
+//                executedMessages += batch.size();
+//            }
 
-
-        } finally {
             if (executedMessages == messages.size()) {
                 ack.acknowledge();
             } else {
                 ack.nack(executedMessages, batchTimeout / 4);
             }
+            logger.info("Acked 1 message");
+        } finally {
+
+            var cnt = local.get();
+            local.set(cnt + 1);
         }
 
 
