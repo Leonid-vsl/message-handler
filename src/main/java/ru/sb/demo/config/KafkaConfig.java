@@ -156,8 +156,10 @@ public class KafkaConfig {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "messageHandler");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass()); // Set a default key serde
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+//        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Bytes().getClass()); // Set a default key serde
+//        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                 RecoveringDeserializationExceptionHandler.class);
         props.put(RecoveringDeserializationExceptionHandler.KSTREAM_DESERIALIZATION_RECOVERER, recoverer());
@@ -190,11 +192,13 @@ public class KafkaConfig {
 
 
     @Bean
-    public KStream<Integer, String> kStream(StreamsBuilder kStreamBuilder) {
-        KStream<Integer, String> stream = kStreamBuilder.stream(incomingMessageTopic
+    public KStream<?, ?> kStream(StreamsBuilder kStreamBuilder) {
+        var stream = kStreamBuilder.stream(incomingMessageTopic
                 // , Consumed.with(Serdes.Integer(),new JsonSerde<>(MessageBatch.class))
-                //, Consumed.with(Serdes.Integer(), Serdes.String())
+             //   , Consumed.with(Serdes.ByteArray(), Serdes.ByteArray())
         );
+
+
         stream.peek((key, value) -> {
             System.out.println("--------------------------------------111111");
             System.out.println(value);
