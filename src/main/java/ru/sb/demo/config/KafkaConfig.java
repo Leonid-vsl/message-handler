@@ -28,7 +28,9 @@ import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.SeekToCurrentBatchErrorHandler;
+import org.springframework.kafka.streams.RecoveringDeserializationExceptionHandler;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.converter.MessageConverter;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer2;
@@ -92,28 +94,28 @@ public class KafkaConfig {
         props.put(ErrorHandlingDeserializer2.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
         return props;
     }
-//
-//    @Bean
-//    public Map<String, Object> producerConfigs() {
-//        Map<String, Object> props = new HashMap<>();
-//        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
-//        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-//        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-//
-//        return props;
-//    }
 
-//    @Bean
-//    public ProducerFactory<Long, Message> producerFactory() {
-//        final DefaultKafkaProducerFactory<Long, Message> factory =
-//                new DefaultKafkaProducerFactory<>(producerConfigs());
-//        return factory;
-    // }
+    @Bean
+    public Map<String, Object> producerConfigs() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
 
-//    @Bean
-//    public KafkaTemplate<Long, Message> messageKafkaTemplate() {
-//        return new KafkaTemplate<>(producerFactory());
-//    }
+        return props;
+    }
+
+    @Bean
+    public ProducerFactory<Long, Message> producerFactory() {
+        final DefaultKafkaProducerFactory<Long, Message> factory =
+                new DefaultKafkaProducerFactory<>(producerConfigs());
+        return factory;
+     }
+
+    @Bean
+    public KafkaTemplate<Long, Message> messageKafkaTemplate() {
+        return new KafkaTemplate<>(producerFactory());
+    }
 
 //    @Bean
 //    public IncomingMessageHandler incomingMessageHandler(KafkaTemplate<Long, Message> messageKafkaTemplate) {
@@ -154,8 +156,11 @@ public class KafkaConfig {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "messageHandler");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass()); // Set a default key serde
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass()); // Set a default key serde
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+                RecoveringDeserializationExceptionHandler.class);
+        props.put(RecoveringDeserializationExceptionHandler.KSTREAM_DESERIALIZATION_RECOVERER, recoverer());
 //        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
 //        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, new JsonSerde<>(MessageBatch.class));
 
@@ -164,22 +169,37 @@ public class KafkaConfig {
     }
 
     @Bean
+    public DeadLetterPublishingRecoverer recoverer() {
+        return new DeadLetterPublishingRecoverer(messageKafkaTemplate(),
+                (record, ex) -> new TopicPartition("recovererDLQ", -1));
+    }
+
+    @Bean
     @Primary
     public StreamsBuilderFactoryBean myKStreamBuilder(KafkaStreamsConfiguration streamsConfig) {
-        return new StreamsBuilderFactoryBean(streamsConfig);
+        StreamsBuilderFactoryBean streamsBuilderFactoryBean = new StreamsBuilderFactoryBean(streamsConfig);
+        streamsBuilderFactoryBean.setStateListener((newState, oldState) -> {
+            System.out.println(newState);
+        });
+        streamsBuilderFactoryBean.setUncaughtExceptionHandler((t, e) -> {
+            System.out.println(e);
+        });
+
+        return streamsBuilderFactoryBean;
     }
 
 
     @Bean
-    public KStream<?, ?> kStream(StreamsBuilder kStreamBuilder) {
-        KStream<String, String> stream = kStreamBuilder.stream(incomingMessageTopic
+    public KStream<Integer, String> kStream(StreamsBuilder kStreamBuilder) {
+        KStream<Integer, String> stream = kStreamBuilder.stream(incomingMessageTopic
                 // , Consumed.with(Serdes.Integer(),new JsonSerde<>(MessageBatch.class))
-                , Consumed.with(Serdes.String(), Serdes.String())
+                //, Consumed.with(Serdes.Integer(), Serdes.String())
         );
-        stream
-                .peek((key, value) -> {
-                    System.out.println("111111");
-                })
+        stream.peek((key, value) -> {
+            System.out.println("--------------------------------------111111");
+            System.out.println(value);
+            System.out.println("--------------------------------------111111");
+        })
 
 //                .filter((key, batch) -> {
 //                    var isEmpty = batch.getMessages().size() > 0;
@@ -203,6 +223,8 @@ public class KafkaConfig {
         // stream.print();
         //  stream.agg
         stream.print(Printed.toSysOut());
+
+
         return stream;
     }
 
