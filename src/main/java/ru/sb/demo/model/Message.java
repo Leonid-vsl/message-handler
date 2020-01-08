@@ -1,5 +1,6 @@
 package ru.sb.demo.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.data.domain.Persistable;
 
 import javax.persistence.Column;
@@ -56,11 +57,13 @@ public class Message implements Persistable {
         return Objects.hash(messageId);
     }
 
+    @JsonIgnore
     @Override
     public Object getId() {
         return messageId;
     }
 
+    @JsonIgnore
     @Override
     public boolean isNew() {
         return true;

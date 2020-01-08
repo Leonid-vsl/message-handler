@@ -6,12 +6,12 @@ server:
 app:
   handledMessageTopic: handeled-messages
   handledMessagePartitions: 3
-  handledMessageListeners: 3
   incomingMessageTopic: incoming-messages
   incomingMessagePartitions: 3
-  incomingMessageListeners: 3
-  batchSize: 3
-  batchTimeout: 15_000 #millis
+  aggregatedMessageTopic: aggregated-messages
+  aggregatedMessagePartitions: 3
+  batchSize: 15
+  batchTimeout: 5_000 #millis
 
 
 

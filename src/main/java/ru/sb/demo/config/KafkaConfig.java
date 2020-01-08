@@ -1,54 +1,34 @@
 package ru.sb.demo.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Printed;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
 import org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration;
-import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.KafkaStreamsConfiguration;
-import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import org.springframework.kafka.config.TopicBuilder;
-import org.springframework.kafka.core.*;
-import org.springframework.kafka.listener.ContainerProperties;
-import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
-import org.springframework.kafka.listener.SeekToCurrentBatchErrorHandler;
 import org.springframework.kafka.streams.RecoveringDeserializationExceptionHandler;
-import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.kafka.support.converter.MessageConverter;
-import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer2;
-import org.springframework.kafka.support.serializer.JsonDeserializer;
-import org.springframework.kafka.support.serializer.JsonSerde;
-import org.springframework.kafka.support.serializer.JsonSerializer;
-import ru.sb.demo.handler.IncomingMessageHandler;
-import ru.sb.demo.handler.MessageStoreHandler;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
-import ru.sb.demo.service.MessageService;
+import ru.sb.demo.processor.AggregationMessageProcessor;
+import ru.sb.demo.processor.IncomingMessageProcessor;
+import ru.sb.demo.processor.StoreMessageProcessor;
+import ru.sb.demo.serde.JsonPOJODeserializer;
+import ru.sb.demo.serde.JsonPOJOSerializer;
 
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import static java.util.stream.Collectors.toList;
 
 @Configuration
 @EnableKafka
@@ -70,6 +50,11 @@ public class KafkaConfig {
     @Value("${app.handledMessagePartitions}")
     private int handledMessagePartitions;
 
+    @Value("${app.aggregatedMessageTopic}")
+    private String aggregatedMessageTopic;
+
+    @Value("${app.aggregatedMessagePartitions}")
+    private int aggregatedMessagePartitions;
 
     @Bean
     public NewTopic handledMessageTopic() {
@@ -82,73 +67,15 @@ public class KafkaConfig {
                 .partitions(incomingMessagePartitions)
                 .replicas(1)
                 .build();
-        // return new NewTopic(incomingMessageTopic, incomingMessagePartitions, (short) 1);
     }
 
     @Bean
-    public Map<String, Object> consumerProperties() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer2.class);
-        props.put(ErrorHandlingDeserializer2.VALUE_DESERIALIZER_CLASS, JsonDeserializer.class);
-        return props;
+    public NewTopic aggregatedMessageTopic() {
+        return TopicBuilder.name(aggregatedMessageTopic)
+                .partitions(aggregatedMessagePartitions)
+                .replicas(1)
+                .build();
     }
-
-    @Bean
-    public Map<String, Object> producerConfigs() {
-        Map<String, Object> props = new HashMap<>();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-
-        return props;
-    }
-
-    @Bean
-    public ProducerFactory<Long, Message> producerFactory() {
-        final DefaultKafkaProducerFactory<Long, Message> factory =
-                new DefaultKafkaProducerFactory<>(producerConfigs());
-        return factory;
-     }
-
-    @Bean
-    public KafkaTemplate<Long, Message> messageKafkaTemplate() {
-        return new KafkaTemplate<>(producerFactory());
-    }
-
-//    @Bean
-//    public IncomingMessageHandler incomingMessageHandler(KafkaTemplate<Long, Message> messageKafkaTemplate) {
-//        return new IncomingMessageHandler(handledMessageTopic, messageKafkaTemplate);
-    // }
-
-//    @Bean
-//    public ConcurrentKafkaListenerContainerFactory<Long, MessageBatch> incomingMessageContainerFactory() {
-//        ConcurrentKafkaListenerContainerFactory<Long, MessageBatch> factory =
-//                new ConcurrentKafkaListenerContainerFactory<>();
-//        factory.setConcurrency(incomingMessagePartitions);
-//
-//        factory.setConsumerFactory(incomingConsumerFactory());
-//        factory.setBatchListener(true);
-//
-//        return factory;
-//    }
-
-
-//    @Bean
-//    public ConsumerFactory<Object, Object> incomingConsumerFactory() {
-//        return new DefaultKafkaConsumerFactory<>(incomingMessagesConsumerConfigs());
-//    }
-//
-//    @Bean
-//    public Map<String, Object> incomingMessagesConsumerConfigs() {
-//        Map<String, Object> props = new HashMap<>(consumerProperties());
-//        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, MessageBatch.class);
-//        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-//
-//
-//        return props;
-//    }
 
     @Bean(name = KafkaStreamsDefaultConfiguration.DEFAULT_STREAMS_CONFIG_BEAN_NAME)
     public KafkaStreamsConfiguration kStreamsConfigs() {
@@ -156,116 +83,70 @@ public class KafkaConfig {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "messageHandler");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer);
 
-//        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Bytes().getClass()); // Set a default key serde
-//        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                 RecoveringDeserializationExceptionHandler.class);
-        props.put(RecoveringDeserializationExceptionHandler.KSTREAM_DESERIALIZATION_RECOVERER, recoverer());
-//        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-//        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, new JsonSerde<>(MessageBatch.class));
 
-        // props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class.getName());
         return new KafkaStreamsConfiguration(props);
     }
 
+
     @Bean
-    public DeadLetterPublishingRecoverer recoverer() {
-        return new DeadLetterPublishingRecoverer(messageKafkaTemplate(),
-                (record, ex) -> new TopicPartition("recovererDLQ", -1));
+    public Serde<MessageBatch> createBatchSerde() {
+
+        JsonPOJOSerializer<MessageBatch> serializer = new JsonPOJOSerializer<>();
+        serializer.configure(Collections.singletonMap("JsonPOJOClass", MessageBatch.class), false);
+
+        JsonPOJODeserializer<MessageBatch> deserializer = new JsonPOJODeserializer<>();
+        deserializer.configure(Collections.singletonMap("JsonPOJOClass", MessageBatch.class), false);
+        return Serdes.serdeFrom(serializer, deserializer);
     }
 
     @Bean
-    @Primary
-    public StreamsBuilderFactoryBean myKStreamBuilder(KafkaStreamsConfiguration streamsConfig) {
-        StreamsBuilderFactoryBean streamsBuilderFactoryBean = new StreamsBuilderFactoryBean(streamsConfig);
-        streamsBuilderFactoryBean.setStateListener((newState, oldState) -> {
-            System.out.println(newState);
-        });
-        streamsBuilderFactoryBean.setUncaughtExceptionHandler((t, e) -> {
-            System.out.println(e);
-        });
+    public Serde<Message> createMessageSerde() {
 
-        return streamsBuilderFactoryBean;
+        var serializer = new JsonPOJOSerializer<Message>();
+        serializer.configure(Collections.singletonMap("JsonPOJOClass", Message.class), false);
+
+        var deserializer = new JsonPOJODeserializer<Message>();
+        deserializer.configure(Collections.singletonMap("JsonPOJOClass", Message.class), false);
+        return Serdes.serdeFrom(serializer, deserializer);
     }
 
+    @Autowired
+    private IncomingMessageProcessor incomingMessageProcessor;
+
+    @Autowired
+    private AggregationMessageProcessor persistMessageProcessor;
+
+    @Autowired
+    private StoreMessageProcessor storeMessageProcessor;
 
     @Bean
-    public KStream<?, ?> kStream(StreamsBuilder kStreamBuilder) {
-        var stream = kStreamBuilder.stream(incomingMessageTopic
-                // , Consumed.with(Serdes.Integer(),new JsonSerde<>(MessageBatch.class))
-             //   , Consumed.with(Serdes.ByteArray(), Serdes.ByteArray())
-        );
+    public KStream<?, ?> incomingMessageStream(StreamsBuilder kStreamBuilder) {
 
-
-        stream.peek((key, value) -> {
-            System.out.println("--------------------------------------111111");
-            System.out.println(value);
-            System.out.println("--------------------------------------111111");
-        })
-
-//                .filter((key, batch) -> {
-//                    var isEmpty = batch.getMessages().size() > 0;
-//                    if (isEmpty) {
-//                        System.out.println("Batch is empty");
-//                    }
-//                    return isEmpty;
-//                }).flatMap((key, value) -> value.getMessages().stream().map(message -> new KeyValue<>(message.getMessageId(), message)).collect(toList()))
-//                .filterNot((key, message) -> {
-//                    var isZero = message.getMessageId() > 0;
-//                    if (isZero) {
-//                        System.out.println("key is zero");
-//                    }
-//                    return isZero;
-//                })
-////                .aggregate(() -> {return new List<Message>()},(key, value, aggregate) -> {
-////
-////                })
-                .to(handledMessageTopic);
-
-        // stream.print();
-        //  stream.agg
+        var stream = kStreamBuilder.stream(incomingMessageTopic, Consumed.with(Serdes.Long(), createBatchSerde()));
+        incomingMessageProcessor.process(stream);
         stream.print(Printed.toSysOut());
-
 
         return stream;
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<Long, Message> messageStoreContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<Long, Message> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(messageStoreConsumerFactory());
-        factory.setConcurrency(handledMessagePartitions);
-        // factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+    public KStream<?, ?> filteredMessageStream(StreamsBuilder kStreamBuilder) {
+        var stream = kStreamBuilder.stream(handledMessageTopic, Consumed.with(Serdes.String(), createMessageSerde()));
 
-        factory.setBatchListener(true);
-        SeekToCurrentBatchErrorHandler errorHandler = new SeekToCurrentBatchErrorHandler();
-        //    factory.getContainerProperties().setIdleBetweenPolls(15_000);
-        factory.setBatchErrorHandler(errorHandler);
-
-        return factory;
+        persistMessageProcessor.process(stream);
+        stream.print(Printed.toSysOut());
+        return stream;
     }
 
     @Bean
-    @Primary
-    public ConsumerFactory<Object, Object> messageStoreConsumerFactory() {
-        return new DefaultKafkaConsumerFactory<>(messageStoreConsumerConfigs());
-    }
+    public KStream<?, ?> storeMessageStream(StreamsBuilder kStreamBuilder) {
+        var stream = kStreamBuilder.stream(aggregatedMessageTopic, Consumed.with(Serdes.String(), createBatchSerde()));
 
-    @Bean
-    public Map<String, Object> messageStoreConsumerConfigs() {
-        Map<String, Object> props = new HashMap<>(consumerProperties());
-        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Message.class);
-        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
-
-        return props;
-    }
-
-    @Bean
-    public MessageStoreHandler messageStoreHandler(MessageService messageService) {
-        return new MessageStoreHandler(messageService);
+        storeMessageProcessor.process(stream);
+        stream.print(Printed.toSysOut());
+        return stream;
     }
 
 }

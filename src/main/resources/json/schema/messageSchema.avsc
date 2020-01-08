@@ -1,0 +1,24 @@
+[
+    {"namespace": "ru.sb.demo.model",
+     "type": "record",
+     "name": "MessageBatch",
+     "fields": [
+         {
+             "name":"messages",
+             "type":{
+                 "type": "array",
+                 "items":{
+                     "name":"Message",
+                     "type":"record",
+                     "fields":[
+                         {"name":"messageId", "type":"long"},
+                         {"name":"payload", "type":"string"}
+                     ]
+                 }
+             }
+         }
+     ]
+    }
+]
+
+
