@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
+import ru.sb.demo.service.MessageService;
 
 @Component
 public class StoreMessageProcessor {
@@ -20,6 +21,9 @@ public class StoreMessageProcessor {
     @Autowired
     private Serde<MessageBatch> messageBatchSerde;
 
+    @Autowired
+    MessageService messageService;
+
     public void process(KStream<Windowed<String>, Message> stream) {
 
         stream.groupByKey().aggregate(MessageBatch::new, (key, value, aggregate) -> {
@@ -27,7 +31,7 @@ public class StoreMessageProcessor {
             return aggregate;
         }, Materialized.with(WindowedSerdes.timeWindowedSerdeFrom(String.class), messageBatchSerde)).toStream().
         foreach((key, value) -> {
-
+            messageService.handleMessages(value.getMessages());
             logger.info("Receive message batch of size: {} ", value.getMessages().size());
             logger.info("Message batch: {} ", value);
         });

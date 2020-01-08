@@ -35,7 +35,7 @@ public class MessageServiceImpl implements MessageService {
         } catch (DataIntegrityViolationException e) {
             if (e.getCause() instanceof ConstraintViolationException) {
                 ConstraintViolationException constraintViolationException = (ConstraintViolationException) e.getCause();
-                if(constraintViolationException.getCause() instanceof BatchUpdateException){
+                if (constraintViolationException.getCause() instanceof BatchUpdateException) {
                     BatchUpdateException batchUpdateException = (BatchUpdateException) constraintViolationException.getCause();
                     var updateCounts = batchUpdateException.getUpdateCounts();
                     for (int i = 0; i < updateCounts.length; i++) {
@@ -45,6 +45,8 @@ public class MessageServiceImpl implements MessageService {
                     }
                 }
             }
+            logger.error(e);
+        } catch (Exception e) {
             logger.error(e);
         }
     }

@@ -39,29 +39,13 @@ public class AggregationMessageProcessor {
 
         stream.groupByKey(Grouped.with(Serdes.Long(), messageSerde))
                 .windowedBy(TimeWindows.of(ofMillis(batchTimeout)))
-                //.windowedBy(SessionWindows.with(ofMillis(batchTimeout)))
-                .reduce((a, b) -> {
-                    return a;
-                }, Materialized.with(Serdes.Long(), messageSerde))
+                .reduce((a, b) -> a, Materialized.with(Serdes.Long(), messageSerde))
                 .toStream()
                 .map((key, value) -> {
-                    Windowed<String> windowKey = new Windowed<>(batchKeyGen.generateId(), key.window());
+                    var windowKey = new Windowed<>(batchKeyGen.generateId(), key.window());
                     return new KeyValue<>(windowKey, value);
-                })
-//                .peek((key, value) -> {
-//                    logger.info("aggregated key {} value {}", key, value);
-//                })
-                .to(aggregatedMessageTopic, Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class), messageSerde));
-//
-//                .peek((key, value) -> {
-//                    logger.info("aggregated {}", value);
-//                })
-//                .to(aggregatedMessageTopic, Produced.with(Serdes.String(), messageBatchSerde));
+                }).to(aggregatedMessageTopic, Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class), messageSerde));
 
-//                .toStream((key, value) -> {
-//                    return new KeyValue<>(batchKeyGen.generateId(), key);
-//                })
-//                .to(aggregatedMessageTopic, Produced.with(Serdes.String(), messageSerde));
 
     }
 }
