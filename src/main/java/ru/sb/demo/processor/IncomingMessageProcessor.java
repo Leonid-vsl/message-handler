@@ -26,10 +26,6 @@ public class IncomingMessageProcessor {
     @Autowired
     private Serde<Message> messageSerde;
 
-    @Autowired
-    private BatchKeyGen batchKeyGen;
-
-
     public void process(KStream<Long, MessageBatch> stream) {
         stream
                 .peek((key, value) -> {
@@ -52,9 +48,7 @@ public class IncomingMessageProcessor {
                         logger.info("Incoming message id isn't valid. Msg: {}", value);
                     }
                     return isNotZero;
-                }).map((key, value) ->
-                        new KeyValue<>(batchKeyGen.generateId(), value)
-                 )
-               .to(handledMessageTopic, Produced.with(Serdes.String(), messageSerde));
+               })
+               .to(handledMessageTopic, Produced.with(Serdes.Long(), messageSerde));
     }
 }

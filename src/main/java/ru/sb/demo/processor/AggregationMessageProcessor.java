@@ -2,6 +2,7 @@ package ru.sb.demo.processor;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -10,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
+
+import java.security.Key;
 
 import static java.time.Duration.ofMillis;
 
@@ -25,20 +28,40 @@ public class AggregationMessageProcessor {
 
     @Autowired
     private Serde<MessageBatch> messageBatchSerde;
+
     @Autowired
     private Serde<Message> messageSerde;
 
-    public void process(KStream<String, Message> stream) {
+    @Autowired
+    private BatchKeyGen batchKeyGen;
 
-        stream.groupByKey(Grouped.with(Serdes.String(), messageSerde))
-                .windowedBy(TimeWindows.of(ofMillis(batchTimeout)).advanceBy(ofMillis(1_000)))
-                .aggregate(MessageBatch::new, (key, value, aggregate) -> {
-                            aggregate.getMessages().add(value);
-                            return aggregate;
-                        }
-                        , Materialized.with(Serdes.String(), messageBatchSerde)
-                ).
-                toStream().to(aggregatedMessageTopic);
+    public void process(KStream<Long, Message> stream) {
+
+        stream.groupByKey(Grouped.with(Serdes.Long(), messageSerde))
+                .windowedBy(TimeWindows.of(ofMillis(batchTimeout)))
+                //.windowedBy(SessionWindows.with(ofMillis(batchTimeout)))
+                .reduce((a, b) -> {
+                    return a;
+                }, Materialized.with(Serdes.Long(), messageSerde))
+                .toStream()
+                .map((key, value) -> {
+                    Windowed<String> windowKey = new Windowed<>(batchKeyGen.generateId(), key.window());
+                    return new KeyValue<>(windowKey, value);
+                })
+//                .peek((key, value) -> {
+//                    logger.info("aggregated key {} value {}", key, value);
+//                })
+                .to(aggregatedMessageTopic, Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class), messageSerde));
+//
+//                .peek((key, value) -> {
+//                    logger.info("aggregated {}", value);
+//                })
+//                .to(aggregatedMessageTopic, Produced.with(Serdes.String(), messageBatchSerde));
+
+//                .toStream((key, value) -> {
+//                    return new KeyValue<>(batchKeyGen.generateId(), key);
+//                })
+//                .to(aggregatedMessageTopic, Produced.with(Serdes.String(), messageSerde));
 
     }
 }

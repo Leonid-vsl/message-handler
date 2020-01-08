@@ -8,6 +8,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Printed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -133,7 +134,7 @@ public class KafkaConfig {
 
     @Bean
     public KStream<?, ?> filteredMessageStream(StreamsBuilder kStreamBuilder) {
-        var stream = kStreamBuilder.stream(handledMessageTopic, Consumed.with(Serdes.String(), createMessageSerde()));
+        var stream = kStreamBuilder.stream(handledMessageTopic, Consumed.with(Serdes.Long(), createMessageSerde()));
 
         persistMessageProcessor.process(stream);
         stream.print(Printed.toSysOut());
@@ -142,7 +143,7 @@ public class KafkaConfig {
 
     @Bean
     public KStream<?, ?> storeMessageStream(StreamsBuilder kStreamBuilder) {
-        var stream = kStreamBuilder.stream(aggregatedMessageTopic, Consumed.with(Serdes.String(), createBatchSerde()));
+        var stream = kStreamBuilder.stream(aggregatedMessageTopic, Consumed.with(WindowedSerdes.timeWindowedSerdeFrom(String.class), createMessageSerde()));
 
         storeMessageProcessor.process(stream);
         stream.print(Printed.toSysOut());
