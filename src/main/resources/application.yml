@@ -11,7 +11,7 @@ app:
   incomingMessagePartitions: 3
   incomingMessageListeners: 3
   batchSize: 15
-  batchTimeout: 1_000 #millis
+  batchTimeout: 10_000 #millis
 
 
 

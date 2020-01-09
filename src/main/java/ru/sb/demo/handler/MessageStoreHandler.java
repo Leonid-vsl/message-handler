@@ -48,23 +48,22 @@ public class MessageStoreHandler {
         int executedMessages = 0;
         try {
 
-            List<ConsumerRecord<Long, Message>> toStore = emptyList();
-            if (messages.size() < batchSize && isBatchTimedOut(messages)) {
-                toStore = messages;
-            } else if (messages.size() >= batchSize) {
+            List<ConsumerRecord<Long, Message>> toStore;
+            if (messages.size() >= batchSize) {
                 toStore = messages.subList(0, batchSize);
+            } else if (isBatchTimedOut(messages)) {
+                toStore = messages;
+            } else {
+                return;
             }
 
-            if (!toStore.isEmpty()) {
+            List<Message> batch = toStore.stream().map(ConsumerRecord::value).collect(toList());
 
-                List<Message> batch = toStore.stream().map(ConsumerRecord::value).collect(toList());
-
-                logger.info("Sending to storage batch with size {}", batch.size());
-                logger.info("Sending to storage messages with id's {}",
-                        batch.stream().map(Message::getMessageId).collect(toList()));
-                messageService.handleMessages(batch);
-                executedMessages = batch.size();
-            }
+            logger.info("Sending to storage batch with size {}", batch.size());
+            logger.info("Sending to storage messages with id's {}",
+                    batch.stream().map(Message::getMessageId).collect(toList()));
+            messageService.handleMessages(batch);
+            executedMessages = batch.size();
 
 
         } finally {
