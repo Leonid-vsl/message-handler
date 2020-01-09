@@ -11,9 +11,11 @@ import org.springframework.messaging.handler.annotation.Payload;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.service.MessageService;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
@@ -45,18 +47,23 @@ public class MessageStoreHandler {
 
         int executedMessages = 0;
         try {
-            var batches = ListUtils.partition(messages, batchSize).stream().
-                    filter(batch -> batch.size() == batchSize || isBatchTimedOut(batch))
-                    .map(batch -> batch.stream().map(ConsumerRecord::value)
-                            .distinct()
-                            .collect(toList()))
-                    .collect(toList());
 
-            for (List<Message> batch : batches) {
+            List<ConsumerRecord<Long, Message>> toStore = emptyList();
+            if (messages.size() < batchSize && isBatchTimedOut(messages)) {
+                toStore = messages;
+            } else if (messages.size() >= batchSize) {
+                toStore = messages.subList(0, batchSize);
+            }
+
+            if (!toStore.isEmpty()) {
+
+                List<Message> batch = toStore.stream().map(ConsumerRecord::value).collect(toList());
+
+                logger.info("Sending to storage batch with size {}", batch.size());
                 logger.info("Sending to storage messages with id's {}",
                         batch.stream().map(Message::getMessageId).collect(toList()));
                 messageService.handleMessages(batch);
-                executedMessages += batch.size();
+                executedMessages = batch.size();
             }
 
 
