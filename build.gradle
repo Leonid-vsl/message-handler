@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'idea'
-    id 'groovy'
+    //id 'groovy'
     id 'org.springframework.boot' version '2.2.2.RELEASE'
     id 'io.spring.dependency-management' version '1.0.8.RELEASE'
     id "org.flywaydb.flyway" version "6.1.0"
@@ -38,17 +38,23 @@ dependencies {
 
 
     testImplementation('org.springframework.boot:spring-boot-starter-test') {
-        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+       // exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
     }
+//    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.0'
+//    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.3.0'
+//    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.3.0'
+
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation "org.codehaus.groovy:groovy-all:2.5.7"
-    testImplementation "org.spockframework:spock-core:1.3-groovy-2.5"
-    testImplementation 'org.spockframework:spock-spring:1.2-groovy-2.4'
+
+//    testImplementation "org.codehaus.groovy:groovy-all:2.5.7"
+//    testImplementation "org.spockframework:spock-core:1.3-groovy-2.5"
+//    testImplementation 'org.spockframework:spock-spring:1.2-groovy-2.4'
 
     testImplementation "org.testcontainers:kafka:1.12.3"
     testImplementation "org.testcontainers:postgresql:1.12.3"
 
-    testImplementation "org.testcontainers:spock:1.12.3"
+    testImplementation "org.testcontainers:junit-jupiter:1.12.3"
+   // testImplementation "org.testcontainers:spock:1.12.3"
 
     testImplementation 'org.awaitility:awaitility:4.0.1'
     //testImplementation 'kafka-utils:kafka-utils:0.1.1'

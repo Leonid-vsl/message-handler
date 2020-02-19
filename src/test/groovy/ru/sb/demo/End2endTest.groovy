@@ -34,6 +34,12 @@ import java.time.Duration
 @Testcontainers
 class End2endTest extends Specification {
 
+    class JPATestConfig {
+
+
+    }
+
+
     @Shared
     DockerComposeContainer composeContainer = new DockerComposeContainer(
             new File("docker-compose.yml"))

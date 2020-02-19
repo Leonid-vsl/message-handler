@@ -2,9 +2,7 @@ package ru.sb.demo.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +22,6 @@ import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
 import ru.sb.demo.service.MessageService;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -50,12 +47,12 @@ public class KafkaConfig {
 
     @Bean
     public NewTopic handledMessageTopic() {
-        return new NewTopic(handledMessageTopic, handledMessagePartitions, (short) 1);
+        return new NewTopic(handledMessageTopic, handledMessagePartitions, (short) 0);
     }
 
     @Bean
     public NewTopic incomingMessageTopic() {
-        return new NewTopic(incomingMessageTopic, incomingMessagePartitions, (short) 1);
+        return new NewTopic(incomingMessageTopic, incomingMessagePartitions, (short) 0);
     }
 
     @Bean
