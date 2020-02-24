@@ -26,6 +26,8 @@ public class MessageStoreHandler {
     @Value("${app.batchTimeout}")
     private Integer batchTimeout;
 
+    private Integer numOfBatchesInOneShoot;
+
     public MessageStoreHandler(MessageService messageService) {
         this.messageService = messageService;
     }
@@ -58,6 +60,8 @@ public class MessageStoreHandler {
             logger.info("Sending to storage messages with id's {}",
                     batch.stream().map(Message::getMessageId).collect(toList()));
             messageService.handleMessages(batch);
+            logger.info("Message batch handled.");
+
             executedMessages = batch.size();
 
 

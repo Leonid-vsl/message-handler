@@ -4,15 +4,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.orm.jpa.JpaSystemException;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.repository.MessageRepository;
 
-
 import java.sql.BatchUpdateException;
-import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Collection;
 import java.util.List;
 
 public class MessageServiceImpl implements MessageService {
@@ -29,9 +25,6 @@ public class MessageServiceImpl implements MessageService {
 
         try {
             messageRepository.saveAll(messages);
-        } catch (JpaSystemException e) {
-            logger.error("Connection exception", e);
-            throw new DataBaseNotAvailable();
         } catch (DataIntegrityViolationException e) {
             if (e.getCause() instanceof ConstraintViolationException) {
                 ConstraintViolationException constraintViolationException = (ConstraintViolationException) e.getCause();
@@ -45,7 +38,7 @@ public class MessageServiceImpl implements MessageService {
                     }
                 }
             }
-            logger.error(e);
+
         }
     }
 }

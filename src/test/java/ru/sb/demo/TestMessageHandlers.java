@@ -9,7 +9,6 @@ import org.assertj.core.api.Assertions;
 import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.json.AutoConfigureJson;
@@ -23,8 +22,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import ru.sb.demo.config.KafkaConfig;
@@ -33,8 +34,8 @@ import ru.sb.demo.config.TestKafkaProducerConfig;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
 import ru.sb.demo.repository.MessageRepository;
-import ru.sb.demo.service.DataBaseNotAvailable;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -49,11 +50,12 @@ import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest(
-        properties = {"app.batchTimeout=3000", "app.batchSize=4"},
+        properties = {"app.batchTimeout=3000", "app.batchSize=4", "app.handledMessagePartitions=1",
+                "app.incomingMessagePartitions=1","spring.kafka.server=PLAINTEXT://localhost:9094"},
         classes = TestMessageHandlers.TestMessagingConfig.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @AutoConfigureJson
-@ContextConfiguration(initializers = TestMessageHandlers.Initializer.class)
+//@ContextConfiguration(initializers = TestMessageHandlers.Initializer.class)
 @Testcontainers
 public class TestMessageHandlers {
 
@@ -63,7 +65,7 @@ public class TestMessageHandlers {
     }
 
     @Container
-    private static KafkaContainer kafkaContainer = startKafkaContainer();
+    private static DockerComposeContainer kafkaContainer = startKafkaContainer();
 
     @Value("${app.incomingMessageTopic}")
     private String incomingMessageTopic;
@@ -229,7 +231,7 @@ public class TestMessageHandlers {
                 .mapToObj(i -> buildMessage(i, "Payload " + i))
                 .collect(Collectors.toList());
 
-        doThrow(new DataBaseNotAvailable())
+        doThrow(new JpaSystemException(new RuntimeException()))
                 .doAnswer(invocation -> {
                     Iterable<Message> messages = invocation.getArgument(0);
                     var captured = stream(messages.spliterator(), false).map(m ->
@@ -240,17 +242,14 @@ public class TestMessageHandlers {
                 }).when(messageRepository).saveAll(anyIterable());
 
 
-
         sendMessageBatch(expectedMessages);
 
         await().atMost(Duration.ofMillis(batchTimeout + 1_000))
                 .with()
                 .pollInterval(Duration.ofSeconds(1))
-                .untilAsserted(() ->
-                        Assertions.assertThat(receivedMessages)
-                                .containsExactlyInAnyOrderElementsOf(expectedMessages)
-                );
-
+                .untilAsserted(() -> {
+                    verify(messageRepository, atLeastOnce()).saveAll(expectedMessages);
+                });
 
         doAnswer(invocation -> {
             receivedMessages.clear();
@@ -273,6 +272,7 @@ public class TestMessageHandlers {
 
 
     }
+
 
     private void sendMessageBatch(List<Message> batch) {
         ObjectMapper mapper = new ObjectMapper();
@@ -310,21 +310,33 @@ public class TestMessageHandlers {
         return message;
     }
 
-    private static KafkaContainer startKafkaContainer() {
+    private static DockerComposeContainer startKafkaContainer() {
+
+
+        DockerComposeContainer composeContainer = new DockerComposeContainer(
+                new File(TestMessageHandlers.class.getResource("/docker-compose-kafka.yml").getFile()))
+                .withExposedService("kafka_1", 9094,
+                        Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(60)));
+
+
+
+
         final var container = new KafkaContainer();
+//        container.setExposedPorts(List.of(9093));
 
-        container.start();
+        composeContainer.start();
 
 
-        return container;
+        return composeContainer;
     }
 
     static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 
         @Override
         public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+            // System.out.println("+++++++++++++++++++++++++++++++++" + kafkaContainer.getBootstrapServers()+ "+++++++++++++++");
             TestPropertyValues values = TestPropertyValues.of(
-                    "spring.kafka.server=" + kafkaContainer.getBootstrapServers()
+                    "spring.kafka.server=PLAINTEXT://localhost:9094"
             );
             values.applyTo(configurableApplicationContext);
         }

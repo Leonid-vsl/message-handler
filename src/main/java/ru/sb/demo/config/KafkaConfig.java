@@ -12,10 +12,11 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
-import org.springframework.kafka.listener.SeekToCurrentBatchErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer2;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.orm.jpa.JpaSystemException;
+import ru.sb.demo.handler.ErrorHandler;
 import ru.sb.demo.handler.IncomingMessageHandler;
 import ru.sb.demo.handler.MessageStoreHandler;
 import ru.sb.demo.model.Message;
@@ -24,6 +25,7 @@ import ru.sb.demo.service.MessageService;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Configuration
 @EnableKafka
@@ -129,7 +131,7 @@ public class KafkaConfig {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
 
         factory.setBatchListener(true);
-        factory.setBatchErrorHandler(new SeekToCurrentBatchErrorHandler());
+        factory.setBatchErrorHandler(new ErrorHandler(Set.of(JpaSystemException.class)));
 
         return factory;
     }
