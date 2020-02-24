@@ -33,6 +33,7 @@ import ru.sb.demo.config.TestKafkaProducerConfig;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
 import ru.sb.demo.repository.MessageRepository;
+import ru.sb.demo.service.DataBaseNotAvailable;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -219,6 +220,60 @@ public class TestMessageHandlers {
                 );
     }
 
+    @Test
+    public void testErrorHandleOnBatchSave() {
+
+        final var receivedMessages = new CopyOnWriteArrayList<Message>();
+
+        final var expectedMessages = LongStream.range(1, 3)
+                .mapToObj(i -> buildMessage(i, "Payload " + i))
+                .collect(Collectors.toList());
+
+        doThrow(new DataBaseNotAvailable())
+                .doAnswer(invocation -> {
+                    Iterable<Message> messages = invocation.getArgument(0);
+                    var captured = stream(messages.spliterator(), false).map(m ->
+                            buildMessage(m.getMessageId(), m.getPayload())
+                    ).collect(Collectors.toList());
+                    receivedMessages.addAll(captured);
+                    return null;
+                }).when(messageRepository).saveAll(anyIterable());
+
+
+
+        sendMessageBatch(expectedMessages);
+
+        await().atMost(Duration.ofMillis(batchTimeout + 1_000))
+                .with()
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() ->
+                        Assertions.assertThat(receivedMessages)
+                                .containsExactlyInAnyOrderElementsOf(expectedMessages)
+                );
+
+
+        doAnswer(invocation -> {
+            receivedMessages.clear();
+            Iterable<Message> messages = invocation.getArgument(0);
+            var captured = stream(messages.spliterator(), false).map(m ->
+                    buildMessage(m.getMessageId(), m.getPayload())
+            ).collect(Collectors.toList());
+            System.out.println("Captured messages: " + captured.toString());
+            receivedMessages.addAll(captured);
+            return null;
+        }).when(messageRepository).saveAll(anyIterable());
+
+        await().atMost(Duration.ofMillis(batchTimeout + 1_000))
+                .with()
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() ->
+                        Assertions.assertThat(receivedMessages)
+                                .containsExactlyInAnyOrderElementsOf(expectedMessages)
+                );
+
+
+    }
+
     private void sendMessageBatch(List<Message> batch) {
         ObjectMapper mapper = new ObjectMapper();
         var payload = new MessageBatch();
@@ -259,6 +314,7 @@ public class TestMessageHandlers {
         final var container = new KafkaContainer();
 
         container.start();
+
 
         return container;
     }
