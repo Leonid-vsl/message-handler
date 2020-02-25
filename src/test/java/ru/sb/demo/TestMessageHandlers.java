@@ -14,17 +14,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.json.AutoConfigureJson;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.test.util.TestPropertyValues;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.DockerComposeContainer;
-import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,22 +37,36 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
+import static java.util.List.of;
 import static java.util.stream.StreamSupport.stream;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.*;
 
+/**
+ * TODO
+ *
+ * * Test for offset after restart
+ * * Partition re-assignment
+ *
+ *
+ */
+
+
 @SpringBootTest(
         properties = {"app.batchTimeout=3000", "app.batchSize=4", "app.handledMessagePartitions=1",
-                "app.incomingMessagePartitions=1","spring.kafka.server=PLAINTEXT://localhost:9094"},
+                "app.incomingMessagePartitions=1", "spring.kafka.server=PLAINTEXT://localhost:9094"},
         classes = TestMessageHandlers.TestMessagingConfig.class,
         webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @AutoConfigureJson
-//@ContextConfiguration(initializers = TestMessageHandlers.Initializer.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 @Testcontainers
 public class TestMessageHandlers {
 
@@ -75,6 +86,8 @@ public class TestMessageHandlers {
 
     @Value("${app.batchSize}")
     private Integer batchSize;
+
+    private AtomicLong idProvider = new AtomicLong();
 
     @Autowired
     KafkaProducer incomingMsgProducer;
@@ -100,9 +113,7 @@ public class TestMessageHandlers {
     public void testShouldStoreAllMessagesFromPayload() {
         List<Message> receivedMessages = createRepositoryCapture();
 
-        final var messages = LongStream.range(1, 2)
-                .mapToObj(i -> buildMessage(i, "Payload " + i))
-                .collect(Collectors.toList());
+        final var messages = produceMessages(2);
 
         sendMessageBatch(Collections.emptyList());
         sendMessageBatch(messages);
@@ -122,9 +133,7 @@ public class TestMessageHandlers {
     public void testShouldFilerNotValidMessagesFromPayload() {
         List<Message> receivedMessages = createRepositoryCapture();
 
-        final var validMessages = LongStream.range(1, 2)
-                .mapToObj(i -> buildMessage(i, "Payload " + i))
-                .collect(Collectors.toList());
+        final var validMessages = produceMessages(2);
 
         List<Message> messages = new ArrayList<>(validMessages);
         messages.add(buildMessage(0, "Payload 0"));
@@ -163,9 +172,7 @@ public class TestMessageHandlers {
 
         List<Message> receivedMessages = createRepositoryCapture();
 
-        final var messages = LongStream.range(0, batchSize)
-                .mapToObj(i -> buildMessage(i + 1, "Payload " + i))
-                .collect(Collectors.toList());
+        final var messages = produceMessages(batchSize);
 
         sendMessageBatch(messages);
 
@@ -183,26 +190,14 @@ public class TestMessageHandlers {
 
         List<Message> receivedMessages = createRepositoryCapture();
 
-        final var batch = LongStream.range(0, batchSize / 2)
-                .mapToObj(i -> buildMessage(0, "Payload " + i))
-                .collect(Collectors.toList());
+        final var firstHalfOfBatch = produceMessages(batchSize / 2);
+        final var secondHalfOfBatch = produceMessages(batchSize / 2);
 
-        final var batch2 = LongStream.range(0, batchSize / 2)
-                .mapToObj(i -> buildMessage(i + 1, "Payload " + i))
-                .collect(Collectors.toList());
-
-        final var batch3 = LongStream.range(batchSize / 2, batchSize)
-                .mapToObj(i -> buildMessage(i + 1, "Payload " + i))
-                .collect(Collectors.toList());
-
-
-        var messages = new ArrayList<>(batch3);
         Message extraMessage = buildMessage(1, "Payload ");
-        messages.add(extraMessage);
 
-        sendMessageBatch(batch);
-        sendMessageBatch(batch2);
-        sendMessageBatch(messages);
+        sendMessageBatch(firstHalfOfBatch);
+        sendMessageBatch(secondHalfOfBatch);
+        sendMessageBatch(of(extraMessage));
 
 
         await().atMost(Duration.ofSeconds(1))
@@ -210,7 +205,7 @@ public class TestMessageHandlers {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() ->
                         Assertions.assertThat(receivedMessages)
-                                .containsExactlyInAnyOrderElementsOf(ListUtils.union(batch2, batch3))
+                                .containsExactlyInAnyOrderElementsOf(ListUtils.union(firstHalfOfBatch, secondHalfOfBatch))
                 );
 
         await().atMost(Duration.ofMillis(batchTimeout + 1_000))
@@ -218,18 +213,16 @@ public class TestMessageHandlers {
                 .pollInterval(Duration.ofSeconds(1))
                 .untilAsserted(() ->
                         Assertions.assertThat(receivedMessages)
-                                .containsExactlyInAnyOrderElementsOf(List.of(extraMessage))
+                                .containsExactlyInAnyOrderElementsOf(of(extraMessage))
                 );
     }
 
     @Test
-    public void testErrorHandleOnBatchSave() {
+    public void testErrorHandlerShouldReStoreMessagesCausingSeekableExceptions() {
 
         final var receivedMessages = new CopyOnWriteArrayList<Message>();
 
-        final var expectedMessages = LongStream.range(1, 3)
-                .mapToObj(i -> buildMessage(i, "Payload " + i))
-                .collect(Collectors.toList());
+        final var expectedMessages = produceMessages(2);
 
         doThrow(new JpaSystemException(new RuntimeException()))
                 .doAnswer(invocation -> {
@@ -273,6 +266,39 @@ public class TestMessageHandlers {
 
     }
 
+    @Test
+    public void testErrorHandleShouldSkipMessagesCausingNonSeekableExceptions() {
+
+        final var batch1 = produceMessages(2);
+
+        createThrowableRepositoryCapture(new RuntimeException());
+
+        sendMessageBatch(batch1);
+
+        await().atMost(Duration.ofMillis(batchTimeout + 1_000))
+                .with()
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() -> {
+                    verify(messageRepository, times(1)).saveAll(batch1);
+                });
+
+        List<Message> receivedAfterThrow = createRepositoryCapture();
+
+        final var batch2 = produceMessages(2);
+
+        sendMessageBatch(batch2);
+
+        await().atMost(Duration.ofMillis(batchTimeout + 1_000))
+                .with()
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() ->
+                        Assertions.assertThat(batch2)
+                                .containsExactlyInAnyOrderElementsOf(receivedAfterThrow)
+                );
+
+
+    }
+
 
     private void sendMessageBatch(List<Message> batch) {
         ObjectMapper mapper = new ObjectMapper();
@@ -303,11 +329,31 @@ public class TestMessageHandlers {
         return capturedMessages;
     }
 
+    private List<Message> createThrowableRepositoryCapture(Throwable toThrow) {
+        var capturedMessages = new CopyOnWriteArrayList<Message>();
+        doThrow(new RuntimeException())
+                .doAnswer(invocation -> {
+                    Iterable<Message> messages = invocation.getArgument(0);
+                    var captured = stream(messages.spliterator(), false).map(m ->
+                            buildMessage(m.getMessageId(), m.getPayload())
+                    ).collect(Collectors.toList());
+                    capturedMessages.addAll(captured);
+                    return null;
+                }).when(messageRepository).saveAll(anyIterable());
+        return capturedMessages;
+    }
+
     private Message buildMessage(long id, String payload) {
         final var message = new Message();
         message.setMessageId(id);
         message.setPayload(payload);
         return message;
+    }
+
+    private List<Message> produceMessages(int amount) {
+        return LongStream.range(1, amount + 1)
+                .mapToObj(i -> buildMessage(idProvider.incrementAndGet(), "Payload " + UUID.randomUUID().toString()))
+                .collect(Collectors.toList());
     }
 
     private static DockerComposeContainer startKafkaContainer() {
@@ -318,27 +364,9 @@ public class TestMessageHandlers {
                 .withExposedService("kafka_1", 9094,
                         Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(60)));
 
-
-
-
-        final var container = new KafkaContainer();
-//        container.setExposedPorts(List.of(9093));
-
         composeContainer.start();
-
 
         return composeContainer;
     }
 
-    static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-
-        @Override
-        public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
-            // System.out.println("+++++++++++++++++++++++++++++++++" + kafkaContainer.getBootstrapServers()+ "+++++++++++++++");
-            TestPropertyValues values = TestPropertyValues.of(
-                    "spring.kafka.server=PLAINTEXT://localhost:9094"
-            );
-            values.applyTo(configurableApplicationContext);
-        }
-    }
 }

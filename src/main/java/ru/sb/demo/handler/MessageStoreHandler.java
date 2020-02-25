@@ -26,8 +26,6 @@ public class MessageStoreHandler {
     @Value("${app.batchTimeout}")
     private Integer batchTimeout;
 
-    private Integer numOfBatchesInOneShoot;
-
     public MessageStoreHandler(MessageService messageService) {
         this.messageService = messageService;
     }
