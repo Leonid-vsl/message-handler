@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -52,11 +51,9 @@ import static org.mockito.Mockito.*;
 
 /**
  * TODO
- *
+ * <p>
  * * Test for offset after restart
  * * Partition re-assignment
- *
- *
  */
 
 
@@ -195,8 +192,11 @@ public class TestMessageHandlers {
 
         Message extraMessage = buildMessage(1, "Payload ");
 
+        sendMessageBatch(Collections.emptyList());
         sendMessageBatch(firstHalfOfBatch);
+        sendMessageBatch(Collections.emptyList());
         sendMessageBatch(secondHalfOfBatch);
+        sendMessageBatch(Collections.emptyList());
         sendMessageBatch(of(extraMessage));
 
 
@@ -220,20 +220,9 @@ public class TestMessageHandlers {
     @Test
     public void testErrorHandlerShouldReStoreMessagesCausingSeekableExceptions() {
 
-        final var receivedMessages = new CopyOnWriteArrayList<Message>();
-
         final var expectedMessages = produceMessages(2);
 
-        doThrow(new JpaSystemException(new RuntimeException()))
-                .doAnswer(invocation -> {
-                    Iterable<Message> messages = invocation.getArgument(0);
-                    var captured = stream(messages.spliterator(), false).map(m ->
-                            buildMessage(m.getMessageId(), m.getPayload())
-                    ).collect(Collectors.toList());
-                    receivedMessages.addAll(captured);
-                    return null;
-                }).when(messageRepository).saveAll(anyIterable());
-
+        doThrow(new JpaSystemException(new RuntimeException())).when(messageRepository).saveAll(expectedMessages);
 
         sendMessageBatch(expectedMessages);
 
@@ -244,22 +233,13 @@ public class TestMessageHandlers {
                     verify(messageRepository, atLeastOnce()).saveAll(expectedMessages);
                 });
 
-        doAnswer(invocation -> {
-            receivedMessages.clear();
-            Iterable<Message> messages = invocation.getArgument(0);
-            var captured = stream(messages.spliterator(), false).map(m ->
-                    buildMessage(m.getMessageId(), m.getPayload())
-            ).collect(Collectors.toList());
-            System.out.println("Captured messages: " + captured.toString());
-            receivedMessages.addAll(captured);
-            return null;
-        }).when(messageRepository).saveAll(anyIterable());
+        final var afterThrowMessages = createRepositoryCapture();
 
         await().atMost(Duration.ofMillis(batchTimeout + 1_000))
                 .with()
                 .pollInterval(Duration.ofSeconds(1))
                 .untilAsserted(() ->
-                        Assertions.assertThat(receivedMessages)
+                        Assertions.assertThat(afterThrowMessages)
                                 .containsExactlyInAnyOrderElementsOf(expectedMessages)
                 );
 
@@ -271,7 +251,7 @@ public class TestMessageHandlers {
 
         final var batch1 = produceMessages(2);
 
-        createThrowableRepositoryCapture(new RuntimeException());
+        doThrow(new RuntimeException()).when(messageRepository).saveAll(batch1);
 
         sendMessageBatch(batch1);
 
@@ -326,20 +306,6 @@ public class TestMessageHandlers {
             capturedMessages.addAll(captured);
             return null;
         }).when(messageRepository).saveAll(anyIterable());
-        return capturedMessages;
-    }
-
-    private List<Message> createThrowableRepositoryCapture(Throwable toThrow) {
-        var capturedMessages = new CopyOnWriteArrayList<Message>();
-        doThrow(new RuntimeException())
-                .doAnswer(invocation -> {
-                    Iterable<Message> messages = invocation.getArgument(0);
-                    var captured = stream(messages.spliterator(), false).map(m ->
-                            buildMessage(m.getMessageId(), m.getPayload())
-                    ).collect(Collectors.toList());
-                    capturedMessages.addAll(captured);
-                    return null;
-                }).when(messageRepository).saveAll(anyIterable());
         return capturedMessages;
     }
 
