@@ -38,7 +38,7 @@ public class MessageServiceImpl implements MessageService {
                     }
                 }
             }
-
+            throw e; // Rethrow to prevent silent data loss and ensure Kafka consumer can NACK or retry
         }
     }
 }
