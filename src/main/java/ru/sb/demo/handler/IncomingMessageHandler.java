@@ -5,11 +5,14 @@ import org.apache.logging.log4j.Logger;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.AbstractConsumerSeekAware;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.util.concurrent.ListenableFuture;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class IncomingMessageHandler extends AbstractConsumerSeekAware {
 
@@ -26,7 +29,6 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
         this.handledMessageTemplate = handledMessageTemplate;
     }
 
-
     @KafkaListener(
             id = "incoming-message-handler",
             topics = "${app.incomingMessageTopic}",
@@ -40,22 +42,27 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
             logger.warn("Messages payload batch is empty");
             return;
         }
-        batch.stream()
+        
+        List<ListenableFuture<SendResult<Long, Message>>> futures = batch.stream()
                 .filter(this::isNotEmptyBatch)
                 .flatMap(payload -> payload.getMessages().stream())
                 .filter(this::validateMessage)
-                .forEach(message -> {
-                    try {
-                        handledMessageTemplate.send(
-                                handledMessageTopic,
-                                message.getMessageId(),
-                                message
-                        ).get();
-                    } catch (Exception e) {
-                        logger.error("Failed to send message to Kafka synchronously", e);
-                        throw new RuntimeException("Failed to send message to Kafka", e);
-                    }
-                });
+                .map(message -> handledMessageTemplate.send(
+                        handledMessageTopic,
+                        message.getMessageId(),
+                        message
+                ))
+                .collect(Collectors.toList());
+                
+        try {
+            // Await all async operations to complete successfully before committing offset
+            for (ListenableFuture<SendResult<Long, Message>> future : futures) {
+                future.get();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to send message batch to Kafka. Aborting to prevent data loss.", e);
+            throw new RuntimeException("Failed to send message batch to Kafka", e);
+        }
 
     }
 
@@ -75,6 +82,5 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
         }
         return isValid;
     }
-
 
 }
