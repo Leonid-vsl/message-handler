@@ -41,24 +41,30 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
             return;
         }
         batch.stream()
-                .filter(this::filterEmptyBatches)
+                .filter(this::isNotEmptyBatch)
                 .flatMap(payload -> payload.getMessages().stream())
                 .filter(this::validateMessage)
-                .forEach(message ->
+                .forEach(message -> {
+                    try {
                         handledMessageTemplate.send(
                                 handledMessageTopic,
                                 message.getMessageId(),
                                 message
-                        ));
+                        ).get();
+                    } catch (Exception e) {
+                        logger.error("Failed to send message to Kafka synchronously", e);
+                        throw new RuntimeException("Failed to send message to Kafka", e);
+                    }
+                });
 
     }
 
-    private boolean filterEmptyBatches(MessageBatch payload) {
-        boolean isEmpty = !payload.getMessages().isEmpty();
-        if (!isEmpty) {
+    private boolean isNotEmptyBatch(MessageBatch payload) {
+        boolean isNotEmpty = !payload.getMessages().isEmpty();
+        if (!isNotEmpty) {
             logger.warn("Batch is empty");
         }
-        return isEmpty;
+        return isNotEmpty;
     }
 
     private boolean validateMessage(Message message) {
