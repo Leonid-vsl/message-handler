@@ -8,6 +8,7 @@ import org.springframework.kafka.listener.AbstractConsumerSeekAware;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.util.concurrent.ListenableFuture;
+import java.util.concurrent.CompletableFuture;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.model.MessageBatch;
 
@@ -43,7 +44,7 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
             return;
         }
         
-        List<ListenableFuture<SendResult<Long, Message>>> futures = batch.stream()
+        List<CompletableFuture<SendResult<Long, Message>>> futures = batch.stream()
                 .filter(this::isNotEmptyBatch)
                 .flatMap(payload -> payload.getMessages().stream())
                 .filter(this::validateMessage)
@@ -51,14 +52,11 @@ public class IncomingMessageHandler extends AbstractConsumerSeekAware {
                         handledMessageTopic,
                         message.getMessageId(),
                         message
-                ))
+                ).completable())
                 .collect(Collectors.toList());
                 
         try {
-            // Await all async operations to complete successfully before committing offset
-            for (ListenableFuture<SendResult<Long, Message>> future : futures) {
-                future.get();
-            }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         } catch (Exception e) {
             logger.error("Failed to send message batch to Kafka. Aborting to prevent data loss.", e);
             throw new RuntimeException("Failed to send message batch to Kafka", e);
