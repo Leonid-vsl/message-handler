@@ -3,7 +3,6 @@ package ru.sb.demo.handler;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -20,12 +19,6 @@ public class MessageStoreHandler {
 
     private final MessageService messageService;
 
-    @Value("${app.batchSize}")
-    private Integer batchSize;
-
-    @Value("${app.batchTimeout}")
-    private Integer batchTimeout;
-
     public MessageStoreHandler(MessageService messageService) {
         this.messageService = messageService;
     }
@@ -36,46 +29,16 @@ public class MessageStoreHandler {
             containerFactory = "messageStoreContainerFactory"
     )
     public void handleMessages(@Payload List<ConsumerRecord<Long, Message>> messages, Acknowledgment ack) {
+        logger.info("accept messages: {}", messages.stream().map(r -> r.value().getMessageId()).collect(toList()));
 
-        logger.info("accept messages: {}", messages.stream().map(r -> r.value().getMessageId())
-                .collect(toList()));
+        List<Message> batch = messages.stream().map(ConsumerRecord::value).collect(toList());
 
-        int executedMessages = 0;
-        try {
+        logger.info("Sending to storage batch with size {}", batch.size());
+        logger.info("Sending to storage messages with id's {}",
+                batch.stream().map(Message::getMessageId).collect(toList()));
+        messageService.handleMessages(batch);
+        logger.info("Message batch handled.");
 
-            List<ConsumerRecord<Long, Message>> toStore;
-            if (messages.size() >= batchSize) {
-                toStore = messages.subList(0, batchSize);
-            } else if (isBatchTimedOut(messages)) {
-                toStore = messages;
-            } else {
-                return;
-            }
-
-            List<Message> batch = toStore.stream().map(ConsumerRecord::value).collect(toList());
-
-            logger.info("Sending to storage batch with size {}", batch.size());
-            logger.info("Sending to storage messages with id's {}",
-                    batch.stream().map(Message::getMessageId).collect(toList()));
-            messageService.handleMessages(batch);
-            logger.info("Message batch handled.");
-
-            executedMessages = batch.size();
-
-
-        } finally {
-            if (executedMessages == messages.size()) {
-                ack.acknowledge();
-            } else {
-                ack.nack(executedMessages, batchTimeout / 4);
-            }
-        }
-
-
+        ack.acknowledge();
     }
-
-    private boolean isBatchTimedOut(List<ConsumerRecord<Long, Message>> batch) {
-        return System.currentTimeMillis() - batch.get(batch.size() - 1).timestamp() > batchTimeout;
-    }
-
 }

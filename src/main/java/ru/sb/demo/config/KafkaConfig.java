@@ -46,6 +46,11 @@ public class KafkaConfig {
     @Value("${app.handledMessagePartitions}")
     private int handledMessagePartitions;
 
+    @Value("${app.batchSize}")
+    private int batchSize;
+
+    @Value("${app.batchTimeout}")
+    private int batchTimeout;
 
     @Bean
     public NewTopic handledMessageTopic() {
@@ -146,6 +151,8 @@ public class KafkaConfig {
         Map<String, Object> props = new HashMap<>(consumerProperties());
         props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, Message.class);
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, batchSize);
+        props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, batchTimeout);
 
         return props;
     }
