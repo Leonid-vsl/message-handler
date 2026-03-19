@@ -31,11 +31,6 @@ public class MessageStoreHandler {
     public void handleMessages(@Payload List<ConsumerRecord<Long, Message>> messages, Acknowledgment ack) {
         logger.info("accept messages: {}", messages.stream().map(r -> r.value().getMessageId()).collect(toList()));
 
-        if (messages.isEmpty()) {
-            ack.acknowledge();
-            return;
-        }
-
         List<Message> batch = messages.stream().map(ConsumerRecord::value).collect(toList());
 
         logger.info("Sending to storage batch with size {}", batch.size());
