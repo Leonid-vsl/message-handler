@@ -5,5 +5,5 @@ import org.springframework.stereotype.Repository;
 import ru.sb.demo.model.Message;
 
 @Repository
-public interface MessageRepository extends JpaRepository<Message, Integer> {
+public interface MessageRepository extends JpaRepository<Message, Long> {
 }
