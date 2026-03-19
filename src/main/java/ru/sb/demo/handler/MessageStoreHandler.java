@@ -4,7 +4,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.messaging.handler.annotation.Payload;
 import ru.sb.demo.model.Message;
 import ru.sb.demo.service.MessageService;
@@ -28,7 +27,7 @@ public class MessageStoreHandler {
             topics = "${app.handledMessageTopic}",
             containerFactory = "messageStoreContainerFactory"
     )
-    public void handleMessages(@Payload List<ConsumerRecord<Long, Message>> messages, Acknowledgment ack) {
+    public void handleMessages(@Payload List<ConsumerRecord<Long, Message>> messages) {
         logger.info("accept messages: {}", messages.stream().map(r -> r.value().getMessageId()).collect(toList()));
 
         List<Message> batch = messages.stream().map(ConsumerRecord::value).collect(toList());
@@ -38,7 +37,5 @@ public class MessageStoreHandler {
                 batch.stream().map(Message::getMessageId).collect(toList()));
         messageService.handleMessages(batch);
         logger.info("Message batch handled.");
-
-        ack.acknowledge();
     }
 }

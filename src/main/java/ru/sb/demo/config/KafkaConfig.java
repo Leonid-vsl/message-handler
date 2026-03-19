@@ -133,7 +133,6 @@ public class KafkaConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(messageStoreConsumerFactory());
         factory.setConcurrency(handledMessagePartitions);
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
 
         factory.setBatchListener(true);
         factory.setBatchErrorHandler(new ErrorHandler(Set.of(JpaSystemException.class)));
